@@ -1,0 +1,267 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+@import "tailwindcss";
+
+/* Theme, content globs, and plugins are declared in tailwind.config.ts. */
+@config "../tailwind.config.ts";
+
+@layer base {
+  :root {
+    /* Papier chaud, encre pin, accent citron vert : carnet de contrôle industriel. */
+    --background: 54 26% 94%;
+    --foreground: 165 20% 13%;
+
+    --card: 48 30% 97%;
+    --card-foreground: 165 20% 13%;
+
+    --popover: 48 30% 97%;
+    --popover-foreground: 165 20% 13%;
+
+    --primary: 166 36% 14%;
+    --primary-foreground: 54 30% 96%;
+
+    --secondary: 52 23% 89%;
+    --secondary-foreground: 166 30% 16%;
+
+    --muted: 52 22% 89%;
+    --muted-foreground: 158 9% 44%;
+
+    --accent: 71 55% 66%;
+    --accent-foreground: 166 36% 14%;
+
+    --destructive: 9 56% 42%;
+    --destructive-foreground: 54 30% 96%;
+
+    --border: 52 18% 82%;
+    --input: 52 18% 82%;
+    --ring: 166 36% 22%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 166 36% 14%;
+    --sidebar-foreground: 54 25% 92%;
+    --sidebar-primary: 71 55% 66%;
+    --sidebar-primary-foreground: 166 36% 14%;
+    --sidebar-accent: 166 28% 20%;
+    --sidebar-accent-foreground: 54 25% 96%;
+    --sidebar-border: 166 24% 24%;
+    --sidebar-ring: 71 55% 66%;
+
+    --paper: #f4f4ec;
+    --paper-deep: #eae9dd;
+    --ink: #1a2724;
+    --pine: #16302b;
+    --pine-deep: #0d1f1b;
+    --pine-soft: #2c4f45;
+    --lime: #c6d879;
+    --lime-deep: #a8be55;
+    --sand: #dedccc;
+    --steel: #6c7a73;
+    --amber: #c07a34;
+    --clay: #a8452f;
+  }
+
+  .dark {
+    --background: 166 30% 8%;
+    --foreground: 54 25% 92%;
+    --card: 166 26% 11%;
+    --card-foreground: 54 25% 92%;
+    --popover: 166 26% 11%;
+    --popover-foreground: 54 25% 92%;
+    --primary: 71 55% 66%;
+    --primary-foreground: 166 36% 14%;
+    --secondary: 166 22% 16%;
+    --secondary-foreground: 54 25% 92%;
+    --muted: 166 22% 16%;
+    --muted-foreground: 54 12% 66%;
+    --accent: 166 22% 18%;
+    --accent-foreground: 71 55% 72%;
+    --destructive: 9 46% 40%;
+    --destructive-foreground: 54 30% 96%;
+    --border: 166 18% 20%;
+    --input: 166 18% 20%;
+    --ring: 71 55% 66%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "cv05" 1, "ss01" 1;
+    background-color: var(--paper);
+    background-image:
+      radial-gradient(circle at 18% -10%, rgba(198, 216, 121, 0.16), transparent 42%),
+      radial-gradient(circle at 100% 0%, rgba(22, 48, 43, 0.06), transparent 35%);
+    background-attachment: fixed;
+  }
+
+  .admin-screen {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .font-display {
+    font-family: "Fraunces", "Iowan Old Style", Georgia, serif;
+    font-optical-sizing: auto;
+    font-variation-settings: "opsz" 96;
+  }
+
+  .font-mono-label {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  pre,
+  code {
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  ::selection {
+    background: var(--lime);
+    color: var(--pine-deep);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--pine);
+    outline-offset: 2px;
+  }
+}
+
+/* ── Textures ──────────────────────────────────────────────────────────── */
+
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E");
+}
+
+.grain-dark::before {
+  opacity: 0.35;
+  mix-blend-mode: screen;
+}
+
+.grid-paper {
+  background-image:
+    linear-gradient(to right, rgba(22, 48, 43, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(22, 48, 43, 0.055) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+.grid-dark {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+.hairline-top {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.card-paper {
+  background: rgba(252, 252, 246, 0.86);
+  border: 1px solid var(--sand);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 18px 40px -32px rgba(13, 31, 27, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.tick-rule {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--sand) 0,
+    var(--sand) 1px,
+    transparent 1px,
+    transparent 9px
+  );
+}
+
+/* ── Animations ────────────────────────────────────────────────────────── */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(198, 216, 121, 0.55);
+  }
+  50% {
+    opacity: 0.75;
+    box-shadow: 0 0 0 5px rgba(198, 216, 121, 0);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.55s cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+
+.delay-1 { animation-delay: 60ms; }
+.delay-2 { animation-delay: 120ms; }
+.delay-3 { animation-delay: 180ms; }
+.delay-4 { animation-delay: 240ms; }
+
+.loading-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: sweep 1.4s ease-in-out infinite;
+}
+
+.live-dot {
+  animation: pulse-dot 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
