@@ -23,6 +23,7 @@ import {
   cleLieu,
   matchesDay,
   normaliser,
+  reporterName,
   statsParCritere,
   statsParZone,
   tendance,
@@ -571,6 +572,7 @@ function LigneMobile({
 }) {
   const recu = ligne.statut === "Reçu";
   const detail = ligne.rapport ? anomaliesDe(ligne.rapport, manqueAnomalie) : null;
+  const rapporteur = ligne.rapport ? reporterName(ligne.rapport) : "";
   return (
     <div className={ouvert ? "bg-lime/[0.06]" : ""}>
       <button
@@ -633,6 +635,12 @@ function LigneMobile({
               })}
             </div>
             <div className="mt-3 border-t border-sand/70 pt-2.5">
+              {rapporteur && (
+                <p className="mb-1 text-[10px] leading-5 text-ink">
+                  <span className="font-mono-label text-[8px] text-steel">Rapporteur</span>
+                  <span className="ml-2">{rapporteur}</span>
+                </p>
+              )}
               <p className="font-mono-label text-[8px] text-steel">Remarques terrain</p>
               <p className="mt-1 text-[10px] leading-5 text-ink">
                 {ligne.rapport.remarques?.trim() || "Aucune remarque transmise."}
@@ -657,6 +665,7 @@ function FragmentRow({
   onToggle: () => void;
 }) {
   const recu = ligne.statut === "Reçu";
+  const rapporteur = ligne.rapport ? reporterName(ligne.rapport) : "";
   return (
     <>
       <tr
@@ -748,6 +757,12 @@ function FragmentRow({
               </div>
               <div className="mt-4 flex flex-wrap items-start justify-between gap-4 border-t border-sand/70 pt-3">
                 <div>
+                  {rapporteur && (
+                    <p className="mb-2 text-[11px] text-ink">
+                      <span className="font-mono-label text-[8px] text-steel">Rapporteur</span>
+                      <span className="ml-2">{rapporteur}</span>
+                    </p>
+                  )}
                   <p className="font-mono-label text-[8px] text-steel">Remarques terrain</p>
                   <p className="mt-1 max-w-xl text-[11px] leading-5 text-ink">
                     {ligne.rapport.remarques?.trim() || "Aucune remarque transmise."}
