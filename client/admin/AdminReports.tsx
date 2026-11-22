@@ -34,7 +34,13 @@ import {
 } from "./data";
 
 const SECTEUR_OPTIONS = ["Tous", ...ZONES] as const;
+const LOGOS_SECTEUR: Record<string, string> = {
+  LF: "/logo-lf.webp",
+  NISSAN: "/logo-nissan.webp",
+  ST: "/logo-st.webp",
+};
 const NISSAN_LINE_OPTIONS = ["Toutes", "Ligne D", "Ligne A"] as const;
+const STATUT_OPTIONS = ["Toutes", "Évaluations reçues", "En attente"] as const;
 const NISSAN_LINE_UNITS = { "Ligne D": "LD", "Ligne A": "LA" } as const;
 
 interface LigneTable {
@@ -110,6 +116,7 @@ export default function AdminReports() {
   const [query, setQuery] = useState("");
   const [sectorFilter, setSectorFilter] = useState<(typeof SECTEUR_OPTIONS)[number]>("Tous");
   const [nissanLineFilter, setNissanLineFilter] = useState<(typeof NISSAN_LINE_OPTIONS)[number]>("Toutes");
+  const [statutFilter, setStatutFilter] = useState<(typeof STATUT_OPTIONS)[number]>("Toutes");
   const [dateFilter, setDateFilter] = useState("");
   const [manqueAnomalie, setManqueAnomalie] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -213,6 +220,13 @@ export default function AdminReports() {
     );
   }, [reportsFiltres, expectedLocations, sectorFilter, uniteNissanFiltre, query, manqueAnomalie]);
 
+  const lignesFiltrees = useMemo(
+    () => lignes.filter((ligne) => statutFilter === "Toutes" || (statutFilter === "Évaluations reçues" ? ligne.statut === "Reçu" : ligne.statut === "À recevoir")),
+    [lignes, statutFilter],
+  );
+  const recusFiltres = lignesFiltrees.filter((ligne) => ligne.statut === "Reçu").length;
+  const attenteFiltrees = lignesFiltrees.filter((ligne) => ligne.statut === "À recevoir").length;
+
   const conformes = reportsFiltres.filter((r) => estConforme(r, manqueAnomalie)).length;
   const nonConformes = reportsFiltres.length - conformes;
   const pointsNC = reportsFiltres.reduce((sum, r) => sum + anomaliesDe(r, manqueAnomalie).total, 0);
@@ -254,7 +268,7 @@ export default function AdminReports() {
     [reportsFiltres],
   );
   const serie = useMemo(() => tendance(reports, 14, manqueAnomalie), [reports, manqueAnomalie]);
-  const lignesAffichees = toutAfficher ? lignes : lignes.slice(0, 12);
+  const lignesAffichees = toutAfficher ? lignesFiltrees : lignesFiltrees.slice(0, 12);
   const criteresActifs = criteres.filter((c) => c.anomalies > 0).length;
 
   const kpis = [
@@ -455,15 +469,17 @@ export default function AdminReports() {
         </Carte>
       </div>
 
+      <GalerieImages />
+
       {/* Filtres + tableau */}
       <section className="animate-rise delay-3 mt-6">
         <div className="flex flex-col gap-3 border-b border-sand pb-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="font-mono-label text-[9px] text-steel">Détail par emplacement</p>
             <h2 className="mt-1 text-[15px] font-semibold text-pine">
-              {loading ? "Chargement…" : `${lignes.length} ligne${lignes.length > 1 ? "s" : ""}`}
+              {loading ? "Chargement…" : `${lignesFiltrees.length} ligne${lignesFiltrees.length > 1 ? "s" : ""}`}
               <span className="ml-2 text-[11px] font-normal text-steel">
-                {reportsFiltres.length} reçu{reportsFiltres.length > 1 ? "s" : ""} · {enAttente} à recevoir
+                {recusFiltres} reçue{recusFiltres > 1 ? "s" : ""} · {attenteFiltrees} en attente
               </span>
             </h2>
           </div>
@@ -482,8 +498,8 @@ export default function AdminReports() {
         <div
           className={`mt-4 grid gap-3 ${
             sectorFilter === "NISSAN"
-              ? "lg:grid-cols-[minmax(220px,1fr)_auto_auto_190px]"
-              : "lg:grid-cols-[minmax(220px,1fr)_auto_190px]"
+              ? "lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto_190px]"
+              : "lg:grid-cols-[minmax(220px,1fr)_auto_auto_190px]"
           }`}
         >
           <label className="relative block">
@@ -508,10 +524,15 @@ export default function AdminReports() {
                   setNissanLineFilter("Toutes");
                 }}
                 aria-pressed={sectorFilter === secteur}
-                className={`px-3.5 py-2 text-[10px] font-medium transition ${
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-[10px] font-medium transition ${
                   sectorFilter === secteur ? "bg-pine text-white" : "text-steel hover:bg-pine/[0.05] hover:text-pine"
                 }`}
               >
+                <img
+                  src={secteur === "Tous" ? "/logo-general.webp" : LOGOS_SECTEUR[secteur]}
+                  alt=""
+                  className="h-7 w-7 shrink-0 rounded-sm bg-white object-contain"
+                />
                 {secteur}
               </button>
             ))}
@@ -534,6 +555,22 @@ export default function AdminReports() {
               ))}
             </div>
           )}
+
+          <div className="flex flex-wrap border border-sand bg-white/50 p-0.5" role="group" aria-label="Filtrer par état d’évaluation">
+            {STATUT_OPTIONS.map((statut) => (
+              <button
+                key={statut}
+                type="button"
+                onClick={() => setStatutFilter(statut)}
+                aria-pressed={statutFilter === statut}
+                className={`px-2.5 py-2 text-[10px] font-medium transition ${
+                  statutFilter === statut ? "bg-pine text-white" : "text-steel hover:bg-pine/[0.05] hover:text-pine"
+                }`}
+              >
+                {statut}
+              </button>
+            ))}
+          </div>
 
           <label className="relative block">
             <span className="sr-only">Date de réception</span>
@@ -592,7 +629,7 @@ export default function AdminReports() {
                       </td>
                     </tr>
                   ))
-                ) : lignes.length === 0 ? (
+                ) : lignesFiltrees.length === 0 ? (
                   <tr>
                     <td className="px-4 py-14 text-center" colSpan={7}>
                       <CircleDashed className="mx-auto h-6 w-6 text-steel/40" strokeWidth={1.4} />
@@ -624,13 +661,13 @@ export default function AdminReports() {
           </div>
           <div className="flex flex-col gap-3 border-t border-sand/70 bg-white/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1">
-              {lignes.length > 12 && (
+              {lignesFiltrees.length > 12 && (
                 <button
                   type="button"
                   onClick={() => setToutAfficher((v) => !v)}
                   className="w-fit border border-sand bg-white/60 px-2.5 py-1.5 font-mono-label text-[8px] font-semibold text-pine transition hover:border-pine/30 hover:bg-white"
                 >
-                  {toutAfficher ? "Réduire la liste" : `Afficher les ${lignes.length} lignes`}
+                  {toutAfficher ? "Réduire la liste" : `Afficher les ${lignesFiltrees.length} lignes`}
                 </button>
               )}
               <span className="text-[10px] text-steel/80">
@@ -644,6 +681,85 @@ export default function AdminReports() {
         </div>
       </section>
     </AdminLayout>
+  );
+}
+
+interface GalerieImage {
+  name: string;
+  path: string;
+  createdAt: string | null;
+  url: string;
+}
+
+function GalerieImages() {
+  const [images, setImages] = useState<GalerieImage[]>([]);
+  const [bucket, setBucket] = useState("photos-controles");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/images", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => {
+        const result = (await response.json()) as { bucket?: string; images?: GalerieImage[]; error?: string };
+        if (!response.ok) throw new Error(result.error ?? "Les images ne sont pas disponibles.");
+        if (active) {
+          setBucket(result.bucket ?? "photos-controles");
+          setImages(result.images ?? []);
+        }
+      })
+      .catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Les images ne sont pas disponibles.");
+      })
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <section className="card-paper mt-6 overflow-hidden">
+      <div className="flex items-start justify-between gap-3 border-b border-sand/80 px-5 py-4">
+        <div>
+          <p className="font-mono-label text-[8px] text-steel/80">Supabase Storage · {bucket}</p>
+          <h2 className="mt-1 text-[13px] font-semibold text-pine">Photos de contrôle</h2>
+        </div>
+        <span className="font-mono-label text-[8px] text-steel/70">
+          {loading ? "Chargement…" : `${images.length} image${images.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      {error ? (
+        <p role="alert" className="px-5 py-8 text-[11px] text-clay">{error}</p>
+      ) : loading ? (
+        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="loading-sheen aspect-[4/3] bg-sand/30" />
+          ))}
+        </div>
+      ) : images.length === 0 ? (
+        <p className="px-5 py-8 text-[11px] text-steel">Aucune image trouvée dans ce bucket.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
+          {images.map((image) => (
+            <a
+              key={image.path}
+              href={image.url}
+              target="_blank"
+              rel="noreferrer"
+              className="group overflow-hidden border border-sand bg-white/60 transition hover:border-pine/30"
+            >
+              <img
+                src={image.url}
+                alt={image.name}
+                loading="lazy"
+                className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]"
+              />
+              <span className="block truncate px-2.5 py-2 text-[10px] text-steel">{image.name}</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

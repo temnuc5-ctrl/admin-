@@ -6,6 +6,7 @@ import {
   handleAdminConfig,
   handleAdminExport,
   handleAdminExportFile,
+  handleAdminImages,
   handleAdminLogin,
   handleAdminLogout,
   handleAdminReports,
@@ -33,6 +34,7 @@ export function createServer() {
   app.post("/api/admin/logout", handleAdminLogout);
   app.get("/api/admin/config", requireAdmin, handleAdminConfig);
   app.get("/api/admin/reports", requireAdmin, handleAdminReports);
+  app.get("/api/admin/images", requireAdmin, handleAdminImages);
   app.post("/api/admin/export", requireAdmin, handleAdminExport);
   app.get("/api/admin/export/file/:token", requireAdmin, handleAdminExportFile);
 

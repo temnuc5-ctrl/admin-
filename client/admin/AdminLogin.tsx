@@ -98,10 +98,11 @@ export default function AdminLogin() {
           <div className="pointer-events-none absolute bottom-0 right-0 h-40 w-40 bg-[radial-gradient(circle_at_100%_100%,rgba(198,216,121,0.16),transparent_65%)]" aria-hidden="true" />
 
           <div className="relative z-10 flex items-center gap-3">
-            <div className="relative grid h-10 w-10 place-items-center border border-white/25">
-              <span className="h-3 w-3 rotate-45 bg-lime" />
-              <span className="absolute -bottom-px -right-px h-1.5 w-1.5 bg-lime/70" />
-            </div>
+            <img
+              src="/logo-general.webp"
+              alt="HSELY"
+              className="h-10 w-10 rounded-sm border border-white/25 bg-white object-contain"
+            />
             <div>
               <div className="font-mono-label text-[9px] text-white/50">Sécurité industrielle</div>
               <div className="font-display text-[17px] text-white">Douches de sécurité</div>
