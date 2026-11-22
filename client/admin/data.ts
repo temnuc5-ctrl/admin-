@@ -25,6 +25,7 @@ export interface Report {
   unite: string;
   emplacement: string;
   created_at: string;
+  operationnelle?: boolean | null;
   remarques?: string | null;
   rapporteur?: string | null;
   rapporteurs?: { nom?: string; prenom?: string } | { nom?: string; prenom?: string }[] | null;

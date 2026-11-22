@@ -280,6 +280,7 @@ interface RapportBrut {
   unite: string;
   emplacement: string;
   created_at: string;
+  operationnelle?: boolean | null;
   remarques?: string | null;
   rapporteurs?: { nom?: string; prenom?: string } | { nom?: string; prenom?: string }[] | null;
   [cle: string]: unknown;

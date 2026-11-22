@@ -218,6 +218,35 @@ export default function AdminReports() {
   const pointsNC = reportsFiltres.reduce((sum, r) => sum + anomaliesDe(r, manqueAnomalie).total, 0);
   const taux = reportsFiltres.length ? conformes / reportsFiltres.length : 0;
   const enAttente = lignes.filter((l) => l.statut === "À recevoir").length;
+  const etatDouches = useMemo(() => {
+    if (!expectedLocations) return null;
+
+    const emplacements = new Set(
+      expectedLocations
+        .filter((lieu) => sectorFilter === "Tous" || String(lieu.secteur) === sectorFilter)
+        .filter((lieu) => sectorFilter !== "NISSAN" || !uniteNissanFiltre || lieu.unite.trim().toUpperCase() === uniteNissanFiltre)
+        .filter((lieu) => {
+          const recherche = query.trim().toLocaleLowerCase("fr");
+          return !recherche || `${lieu.secteur} ${lieu.unite} ${lieu.emplacement}`.toLocaleLowerCase("fr").includes(recherche);
+        })
+        .map((lieu) => cleLieu(lieu.secteur, lieu.unite, lieu.emplacement)),
+    );
+    const derniersRapports = new Map<string, Report>();
+    for (const report of reportsFiltres) {
+      const key = cleLieu(report.sector, report.unite, report.emplacement);
+      if (!emplacements.has(key)) continue;
+      const dernier = derniersRapports.get(key);
+      if (!dernier || new Date(report.created_at) > new Date(dernier.created_at)) {
+        derniersRapports.set(key, report);
+      }
+    }
+
+    const operationnelles = [...emplacements].filter((key) => derniersRapports.get(key)?.operationnelle === true).length;
+    return {
+      operationnelles,
+      inoperationnelles: emplacements.size - operationnelles,
+    };
+  }, [expectedLocations, reportsFiltres, sectorFilter, uniteNissanFiltre, query]);
 
   const zones = useMemo(() => statsParZone(reportsFiltres, manqueAnomalie), [reportsFiltres, manqueAnomalie]);
   const criteres = useMemo(
@@ -322,6 +351,32 @@ export default function AdminReports() {
           </div>
         ))}
       </div>
+
+      <section className="card-paper relative mt-4 overflow-hidden">
+        <div className="border-b border-sand/80 px-5 py-4">
+          <p className="font-mono-label text-[8px] text-steel/80">Statut binaire · 1 / 0</p>
+          <h2 className="mt-1 text-[13px] font-semibold text-pine">État opérationnel des douches</h2>
+          <p className="mt-1 text-[10px] text-steel">
+            Dernier rapport de la période sélectionnée ; sans rapport ou statut renseigné, la douche compte comme 0.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-sand/80">
+          <div className="bg-pine/[0.025] px-5 py-5 sm:px-7">
+            <p className="font-mono-label text-[9px] font-semibold text-pine">1 · OPÉRATIONNELLES</p>
+            <p className="mt-3 font-display text-4xl leading-none text-pine">
+              {loading ? "—" : etatDouches?.operationnelles ?? "—"}
+            </p>
+            <p className="mt-2 text-[10px] text-steel">douche(s) opérationnelle(s)</p>
+          </div>
+          <div className="bg-clay/[0.025] px-5 py-5 sm:px-7">
+            <p className="font-mono-label text-[9px] font-semibold text-clay">0 · INOPÉRATIONNELLES</p>
+            <p className="mt-3 font-display text-4xl leading-none text-clay">
+              {loading ? "—" : etatDouches?.inoperationnelles ?? "—"}
+            </p>
+            <p className="mt-2 text-[10px] text-steel">douche(s) inopérationnelle(s)</p>
+          </div>
+        </div>
+      </section>
 
       {/* Graphiques */}
       <div className="animate-rise delay-2 mt-6 grid gap-4 xl:grid-cols-[1.35fr_1fr]">
