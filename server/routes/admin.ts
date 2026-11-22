@@ -338,10 +338,17 @@ async function lireEmplacementsAttendus(config: SupabaseConfig) {
       body: "{}",
     });
     if (Array.isArray(données) && données.length) {
-      return données
+      const emplacements = données
         .map((ligne) => ligne as { secteur?: string; unite?: string; emplacement?: string })
         .filter((l) => l.secteur && l.unite && l.emplacement)
         .map((l) => ({ secteur: l.secteur!, unite: l.unite!, emplacement: l.emplacement! }));
+      const cle = (lieu: { secteur: string; unite: string; emplacement: string }) =>
+        `${lieu.secteur}|${lieu.unite}|${lieu.emplacement}`.toLocaleLowerCase("fr");
+      const présents = new Set(emplacements.map(cle));
+      const emplacementsLigneA = LIEUX_REFERENTIEL.filter(
+        (lieu) => lieu.secteur === "NISSAN" && lieu.unite === "LA" && !présents.has(cle(lieu)),
+      );
+      return [...emplacements, ...emplacementsLigneA];
     }
   } catch {
     /* RPC absente : on retombe sur le référentiel embarqué. */
