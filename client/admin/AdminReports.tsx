@@ -34,6 +34,8 @@ import {
 } from "./data";
 
 const SECTEUR_OPTIONS = ["Tous", ...ZONES] as const;
+const NISSAN_LINE_OPTIONS = ["Toutes", "Ligne D", "Ligne A"] as const;
+const NISSAN_LINE_UNITS = { "Ligne D": "LD", "Ligne A": "LA" } as const;
 
 interface LigneTable {
   key: string;
@@ -107,6 +109,7 @@ export default function AdminReports() {
   const [expectedLocations, setExpectedLocations] = useState<ExpectedLocation[] | null>(null);
   const [query, setQuery] = useState("");
   const [sectorFilter, setSectorFilter] = useState<(typeof SECTEUR_OPTIONS)[number]>("Tous");
+  const [nissanLineFilter, setNissanLineFilter] = useState<(typeof NISSAN_LINE_OPTIONS)[number]>("Toutes");
   const [dateFilter, setDateFilter] = useState("");
   const [manqueAnomalie, setManqueAnomalie] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -115,6 +118,7 @@ export default function AdminReports() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [toutAfficher, setToutAfficher] = useState(false);
   const [derniereSync, setDerniereSync] = useState<string>("");
+  const uniteNissanFiltre = nissanLineFilter === "Toutes" ? null : NISSAN_LINE_UNITS[nissanLineFilter];
 
   const charger = useCallback(async (silencieux = false) => {
     if (silencieux) setRefreshing(true);
@@ -149,6 +153,7 @@ export default function AdminReports() {
     const recherche = query.trim().toLocaleLowerCase("fr");
     return reports.filter((report) => {
       const secteurOk = sectorFilter === "Tous" || String(report.sector) === sectorFilter;
+      const ligneOk = sectorFilter !== "NISSAN" || !uniteNissanFiltre || report.unite.trim().toUpperCase() === uniteNissanFiltre;
       const dateOk = matchesDay(report.created_at, dateFilter);
       const contenu = [
         report.sector,
@@ -160,9 +165,9 @@ export default function AdminReports() {
         .filter(Boolean)
         .join(" ")
         .toLocaleLowerCase("fr");
-      return secteurOk && dateOk && contenu.includes(recherche);
+      return secteurOk && ligneOk && dateOk && contenu.includes(recherche);
     });
-  }, [reports, query, sectorFilter, dateFilter]);
+  }, [reports, query, sectorFilter, nissanLineFilter, uniteNissanFiltre, dateFilter]);
 
   const lignes = useMemo<LigneTable[]>(() => {
     const recues: LigneTable[] = reportsFiltres.map((report, index) => ({
@@ -180,6 +185,7 @@ export default function AdminReports() {
     const vus = new Set(reportsFiltres.map((r) => cleLieu(r.sector, r.unite, r.emplacement)));
     const attendues: LigneTable[] = expectedLocations
       .filter((lieu) => sectorFilter === "Tous" || String(lieu.secteur) === sectorFilter)
+      .filter((lieu) => sectorFilter !== "NISSAN" || !uniteNissanFiltre || lieu.unite.trim().toUpperCase() === uniteNissanFiltre)
       .filter((lieu) => {
         const recherche = query.trim().toLocaleLowerCase("fr");
         if (!recherche) return true;
@@ -205,7 +211,7 @@ export default function AdminReports() {
         a.unite.localeCompare(b.unite, "fr") ||
         a.emplacement.localeCompare(b.emplacement, "fr"),
     );
-  }, [reportsFiltres, expectedLocations, sectorFilter, query, manqueAnomalie]);
+  }, [reportsFiltres, expectedLocations, sectorFilter, uniteNissanFiltre, query, manqueAnomalie]);
 
   const conformes = reportsFiltres.filter((r) => estConforme(r, manqueAnomalie)).length;
   const nonConformes = reportsFiltres.length - conformes;
@@ -418,7 +424,13 @@ export default function AdminReports() {
           </label>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_190px]">
+        <div
+          className={`mt-4 grid gap-3 ${
+            sectorFilter === "NISSAN"
+              ? "lg:grid-cols-[minmax(220px,1fr)_auto_auto_190px]"
+              : "lg:grid-cols-[minmax(220px,1fr)_auto_190px]"
+          }`}
+        >
           <label className="relative block">
             <span className="sr-only">Recherche générale</span>
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-steel/70" strokeWidth={1.8} />
@@ -436,7 +448,10 @@ export default function AdminReports() {
               <button
                 key={secteur}
                 type="button"
-                onClick={() => setSectorFilter(secteur)}
+                onClick={() => {
+                  setSectorFilter(secteur);
+                  setNissanLineFilter("Toutes");
+                }}
                 aria-pressed={sectorFilter === secteur}
                 className={`px-3.5 py-2 text-[10px] font-medium transition ${
                   sectorFilter === secteur ? "bg-pine text-white" : "text-steel hover:bg-pine/[0.05] hover:text-pine"
@@ -446,6 +461,24 @@ export default function AdminReports() {
               </button>
             ))}
           </div>
+
+          {sectorFilter === "NISSAN" && (
+            <div className="flex border border-sand bg-white/50 p-0.5" role="group" aria-label="Filtrer par ligne Nissan">
+              {NISSAN_LINE_OPTIONS.map((ligne) => (
+                <button
+                  key={ligne}
+                  type="button"
+                  onClick={() => setNissanLineFilter(ligne)}
+                  aria-pressed={nissanLineFilter === ligne}
+                  className={`px-3.5 py-2 text-[10px] font-medium transition ${
+                    nissanLineFilter === ligne ? "bg-pine text-white" : "text-steel hover:bg-pine/[0.05] hover:text-pine"
+                  }`}
+                >
+                  {ligne}
+                </button>
+              ))}
+            </div>
+          )}
 
           <label className="relative block">
             <span className="sr-only">Date de réception</span>
