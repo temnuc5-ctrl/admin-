@@ -480,11 +480,16 @@ async function televerserBucket(
   return `${config.url}/storage/v1/object/public/${config.bucket}/${cheminEncode}`;
 }
 
-async function urlSignee(config: SupabaseConfig, chemin: string, expiresIn = 60 * 60 * 24 * 7) {
+async function urlSignee(
+  config: SupabaseConfig,
+  chemin: string,
+  expiresIn = 60 * 60 * 24 * 7,
+  bucket = config.bucket,
+) {
   if (!config.serviceKey) return null;
   const cheminEncode = chemin.split("/").map(encodeURIComponent).join("/");
   const response = await fetch(
-    `${config.url}/storage/v1/object/sign/${config.bucket}/${cheminEncode}`,
+    `${config.url}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${cheminEncode}`,
     {
       method: "POST",
       headers: {
@@ -556,7 +561,7 @@ export const handleAdminImages: RequestHandler = async (_request, response) => {
     const images = await Promise.all(
       objects.map(async (object) => ({
         ...object,
-        url: await urlSignee(config, object.path, 60 * 60),
+        url: await urlSignee(config, object.path, 60 * 60, bucket),
       })),
     );
     response.setHeader("Cache-Control", "private, no-store");
