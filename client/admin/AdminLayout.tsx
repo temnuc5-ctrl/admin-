@@ -12,10 +12,11 @@ const NAV = [
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <div className="relative grid h-10 w-10 place-items-center border border-white/25">
-        <span className="h-3 w-3 rotate-45 bg-lime" />
-        <span className="absolute -bottom-px -right-px h-1.5 w-1.5 bg-lime/70" />
-      </div>
+      <img
+        src="/logo-general.webp"
+        alt="HSELY"
+        className="h-10 w-10 rounded-sm border border-white/25 bg-white object-contain"
+      />
       <div className="leading-tight">
         <div className="font-mono-label text-[9px] text-white/55">Contrôles terrain</div>
         <div className="font-display text-[17px] tracking-tight text-white">Douches de sécurité</div>

@@ -23,6 +23,7 @@ import {
   cleLieu,
   matchesDay,
   normaliser,
+  reporterName,
   statsParCritere,
   statsParZone,
   tendance,
@@ -33,6 +34,14 @@ import {
 } from "./data";
 
 const SECTEUR_OPTIONS = ["Tous", ...ZONES] as const;
+const LOGOS_SECTEUR: Record<string, string> = {
+  LF: "/logo-lf.webp",
+  NISSAN: "/logo-nissan.webp",
+  ST: "/logo-st.webp",
+};
+const NISSAN_LINE_OPTIONS = ["Toutes", "Ligne D", "Ligne A"] as const;
+const STATUT_OPTIONS = ["Toutes", "Évaluations reçues", "En attente"] as const;
+const NISSAN_LINE_UNITS = { "Ligne D": "LD", "Ligne A": "LA" } as const;
 
 interface LigneTable {
   key: string;
@@ -106,6 +115,8 @@ export default function AdminReports() {
   const [expectedLocations, setExpectedLocations] = useState<ExpectedLocation[] | null>(null);
   const [query, setQuery] = useState("");
   const [sectorFilter, setSectorFilter] = useState<(typeof SECTEUR_OPTIONS)[number]>("Tous");
+  const [nissanLineFilter, setNissanLineFilter] = useState<(typeof NISSAN_LINE_OPTIONS)[number]>("Toutes");
+  const [statutFilter, setStatutFilter] = useState<(typeof STATUT_OPTIONS)[number]>("Toutes");
   const [dateFilter, setDateFilter] = useState("");
   const [manqueAnomalie, setManqueAnomalie] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -114,6 +125,7 @@ export default function AdminReports() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [toutAfficher, setToutAfficher] = useState(false);
   const [derniereSync, setDerniereSync] = useState<string>("");
+  const uniteNissanFiltre = nissanLineFilter === "Toutes" ? null : NISSAN_LINE_UNITS[nissanLineFilter];
 
   const charger = useCallback(async (silencieux = false) => {
     if (silencieux) setRefreshing(true);
@@ -148,6 +160,7 @@ export default function AdminReports() {
     const recherche = query.trim().toLocaleLowerCase("fr");
     return reports.filter((report) => {
       const secteurOk = sectorFilter === "Tous" || String(report.sector) === sectorFilter;
+      const ligneOk = sectorFilter !== "NISSAN" || !uniteNissanFiltre || report.unite.trim().toUpperCase() === uniteNissanFiltre;
       const dateOk = matchesDay(report.created_at, dateFilter);
       const contenu = [
         report.sector,
@@ -159,9 +172,9 @@ export default function AdminReports() {
         .filter(Boolean)
         .join(" ")
         .toLocaleLowerCase("fr");
-      return secteurOk && dateOk && contenu.includes(recherche);
+      return secteurOk && ligneOk && dateOk && contenu.includes(recherche);
     });
-  }, [reports, query, sectorFilter, dateFilter]);
+  }, [reports, query, sectorFilter, nissanLineFilter, uniteNissanFiltre, dateFilter]);
 
   const lignes = useMemo<LigneTable[]>(() => {
     const recues: LigneTable[] = reportsFiltres.map((report, index) => ({
@@ -179,6 +192,7 @@ export default function AdminReports() {
     const vus = new Set(reportsFiltres.map((r) => cleLieu(r.sector, r.unite, r.emplacement)));
     const attendues: LigneTable[] = expectedLocations
       .filter((lieu) => sectorFilter === "Tous" || String(lieu.secteur) === sectorFilter)
+      .filter((lieu) => sectorFilter !== "NISSAN" || !uniteNissanFiltre || lieu.unite.trim().toUpperCase() === uniteNissanFiltre)
       .filter((lieu) => {
         const recherche = query.trim().toLocaleLowerCase("fr");
         if (!recherche) return true;
@@ -204,13 +218,49 @@ export default function AdminReports() {
         a.unite.localeCompare(b.unite, "fr") ||
         a.emplacement.localeCompare(b.emplacement, "fr"),
     );
-  }, [reportsFiltres, expectedLocations, sectorFilter, query, manqueAnomalie]);
+  }, [reportsFiltres, expectedLocations, sectorFilter, uniteNissanFiltre, query, manqueAnomalie]);
+
+  const lignesFiltrees = useMemo(
+    () => lignes.filter((ligne) => statutFilter === "Toutes" || (statutFilter === "Évaluations reçues" ? ligne.statut === "Reçu" : ligne.statut === "À recevoir")),
+    [lignes, statutFilter],
+  );
+  const recusFiltres = lignesFiltrees.filter((ligne) => ligne.statut === "Reçu").length;
+  const attenteFiltrees = lignesFiltrees.filter((ligne) => ligne.statut === "À recevoir").length;
 
   const conformes = reportsFiltres.filter((r) => estConforme(r, manqueAnomalie)).length;
   const nonConformes = reportsFiltres.length - conformes;
   const pointsNC = reportsFiltres.reduce((sum, r) => sum + anomaliesDe(r, manqueAnomalie).total, 0);
   const taux = reportsFiltres.length ? conformes / reportsFiltres.length : 0;
   const enAttente = lignes.filter((l) => l.statut === "À recevoir").length;
+  const etatDouches = useMemo(() => {
+    if (!expectedLocations) return null;
+
+    const emplacements = new Set(
+      expectedLocations
+        .filter((lieu) => sectorFilter === "Tous" || String(lieu.secteur) === sectorFilter)
+        .filter((lieu) => sectorFilter !== "NISSAN" || !uniteNissanFiltre || lieu.unite.trim().toUpperCase() === uniteNissanFiltre)
+        .filter((lieu) => {
+          const recherche = query.trim().toLocaleLowerCase("fr");
+          return !recherche || `${lieu.secteur} ${lieu.unite} ${lieu.emplacement}`.toLocaleLowerCase("fr").includes(recherche);
+        })
+        .map((lieu) => cleLieu(lieu.secteur, lieu.unite, lieu.emplacement)),
+    );
+    const derniersRapports = new Map<string, Report>();
+    for (const report of reportsFiltres) {
+      const key = cleLieu(report.sector, report.unite, report.emplacement);
+      if (!emplacements.has(key)) continue;
+      const dernier = derniersRapports.get(key);
+      if (!dernier || new Date(report.created_at) > new Date(dernier.created_at)) {
+        derniersRapports.set(key, report);
+      }
+    }
+
+    const operationnelles = [...emplacements].filter((key) => derniersRapports.get(key)?.operationnelle === true).length;
+    return {
+      operationnelles,
+      inoperationnelles: emplacements.size - operationnelles,
+    };
+  }, [expectedLocations, reportsFiltres, sectorFilter, uniteNissanFiltre, query]);
 
   const zones = useMemo(() => statsParZone(reportsFiltres, manqueAnomalie), [reportsFiltres, manqueAnomalie]);
   const criteres = useMemo(
@@ -218,7 +268,7 @@ export default function AdminReports() {
     [reportsFiltres],
   );
   const serie = useMemo(() => tendance(reports, 14, manqueAnomalie), [reports, manqueAnomalie]);
-  const lignesAffichees = toutAfficher ? lignes : lignes.slice(0, 12);
+  const lignesAffichees = toutAfficher ? lignesFiltrees : lignesFiltrees.slice(0, 12);
   const criteresActifs = criteres.filter((c) => c.anomalies > 0).length;
 
   const kpis = [
@@ -316,6 +366,32 @@ export default function AdminReports() {
         ))}
       </div>
 
+      <section className="card-paper relative mt-4 overflow-hidden">
+        <div className="border-b border-sand/80 px-5 py-4">
+          <p className="font-mono-label text-[8px] text-steel/80">Statut binaire · 1 / 0</p>
+          <h2 className="mt-1 text-[13px] font-semibold text-pine">État opérationnel des douches</h2>
+          <p className="mt-1 text-[10px] text-steel">
+            Dernier rapport de la période sélectionnée ; sans rapport ou statut renseigné, la douche compte comme 0.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-sand/80">
+          <div className="bg-pine/[0.025] px-5 py-5 sm:px-7">
+            <p className="font-mono-label text-[9px] font-semibold text-pine">1 · OPÉRATIONNELLES</p>
+            <p className="mt-3 font-display text-4xl leading-none text-pine">
+              {loading ? "—" : etatDouches?.operationnelles ?? "—"}
+            </p>
+            <p className="mt-2 text-[10px] text-steel">douche(s) opérationnelle(s)</p>
+          </div>
+          <div className="bg-clay/[0.025] px-5 py-5 sm:px-7">
+            <p className="font-mono-label text-[9px] font-semibold text-clay">0 · INOPÉRATIONNELLES</p>
+            <p className="mt-3 font-display text-4xl leading-none text-clay">
+              {loading ? "—" : etatDouches?.inoperationnelles ?? "—"}
+            </p>
+            <p className="mt-2 text-[10px] text-steel">douche(s) inopérationnelle(s)</p>
+          </div>
+        </div>
+      </section>
+
       {/* Graphiques */}
       <div className="animate-rise delay-2 mt-6 grid gap-4 xl:grid-cols-[1.35fr_1fr]">
         <Carte
@@ -393,15 +469,17 @@ export default function AdminReports() {
         </Carte>
       </div>
 
+      <GalerieImages />
+
       {/* Filtres + tableau */}
       <section className="animate-rise delay-3 mt-6">
         <div className="flex flex-col gap-3 border-b border-sand pb-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="font-mono-label text-[9px] text-steel">Détail par emplacement</p>
             <h2 className="mt-1 text-[15px] font-semibold text-pine">
-              {loading ? "Chargement…" : `${lignes.length} ligne${lignes.length > 1 ? "s" : ""}`}
+              {loading ? "Chargement…" : `${lignesFiltrees.length} ligne${lignesFiltrees.length > 1 ? "s" : ""}`}
               <span className="ml-2 text-[11px] font-normal text-steel">
-                {reportsFiltres.length} reçu{reportsFiltres.length > 1 ? "s" : ""} · {enAttente} à recevoir
+                {recusFiltres} reçue{recusFiltres > 1 ? "s" : ""} · {attenteFiltrees} en attente
               </span>
             </h2>
           </div>
@@ -417,7 +495,13 @@ export default function AdminReports() {
           </label>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_190px]">
+        <div
+          className={`mt-4 grid gap-3 ${
+            sectorFilter === "NISSAN"
+              ? "lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto_190px]"
+              : "lg:grid-cols-[minmax(220px,1fr)_auto_auto_190px]"
+          }`}
+        >
           <label className="relative block">
             <span className="sr-only">Recherche générale</span>
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-steel/70" strokeWidth={1.8} />
@@ -435,13 +519,55 @@ export default function AdminReports() {
               <button
                 key={secteur}
                 type="button"
-                onClick={() => setSectorFilter(secteur)}
+                onClick={() => {
+                  setSectorFilter(secteur);
+                  setNissanLineFilter("Toutes");
+                }}
                 aria-pressed={sectorFilter === secteur}
-                className={`px-3.5 py-2 text-[10px] font-medium transition ${
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-[10px] font-medium transition ${
                   sectorFilter === secteur ? "bg-pine text-white" : "text-steel hover:bg-pine/[0.05] hover:text-pine"
                 }`}
               >
+                <img
+                  src={secteur === "Tous" ? "/logo-general.webp" : LOGOS_SECTEUR[secteur]}
+                  alt=""
+                  className="h-7 w-7 shrink-0 rounded-sm bg-white object-contain"
+                />
                 {secteur}
+              </button>
+            ))}
+          </div>
+
+          {sectorFilter === "NISSAN" && (
+            <div className="flex border border-sand bg-white/50 p-0.5" role="group" aria-label="Filtrer par ligne Nissan">
+              {NISSAN_LINE_OPTIONS.map((ligne) => (
+                <button
+                  key={ligne}
+                  type="button"
+                  onClick={() => setNissanLineFilter(ligne)}
+                  aria-pressed={nissanLineFilter === ligne}
+                  className={`px-3.5 py-2 text-[10px] font-medium transition ${
+                    nissanLineFilter === ligne ? "bg-pine text-white" : "text-steel hover:bg-pine/[0.05] hover:text-pine"
+                  }`}
+                >
+                  {ligne}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap border border-sand bg-white/50 p-0.5" role="group" aria-label="Filtrer par état d’évaluation">
+            {STATUT_OPTIONS.map((statut) => (
+              <button
+                key={statut}
+                type="button"
+                onClick={() => setStatutFilter(statut)}
+                aria-pressed={statutFilter === statut}
+                className={`px-2.5 py-2 text-[10px] font-medium transition ${
+                  statutFilter === statut ? "bg-pine text-white" : "text-steel hover:bg-pine/[0.05] hover:text-pine"
+                }`}
+              >
+                {statut}
               </button>
             ))}
           </div>
@@ -503,7 +629,7 @@ export default function AdminReports() {
                       </td>
                     </tr>
                   ))
-                ) : lignes.length === 0 ? (
+                ) : lignesFiltrees.length === 0 ? (
                   <tr>
                     <td className="px-4 py-14 text-center" colSpan={7}>
                       <CircleDashed className="mx-auto h-6 w-6 text-steel/40" strokeWidth={1.4} />
@@ -535,13 +661,13 @@ export default function AdminReports() {
           </div>
           <div className="flex flex-col gap-3 border-t border-sand/70 bg-white/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1">
-              {lignes.length > 12 && (
+              {lignesFiltrees.length > 12 && (
                 <button
                   type="button"
                   onClick={() => setToutAfficher((v) => !v)}
                   className="w-fit border border-sand bg-white/60 px-2.5 py-1.5 font-mono-label text-[8px] font-semibold text-pine transition hover:border-pine/30 hover:bg-white"
                 >
-                  {toutAfficher ? "Réduire la liste" : `Afficher les ${lignes.length} lignes`}
+                  {toutAfficher ? "Réduire la liste" : `Afficher les ${lignesFiltrees.length} lignes`}
                 </button>
               )}
               <span className="text-[10px] text-steel/80">
@@ -558,6 +684,85 @@ export default function AdminReports() {
   );
 }
 
+interface GalerieImage {
+  name: string;
+  path: string;
+  createdAt: string | null;
+  url: string;
+}
+
+function GalerieImages() {
+  const [images, setImages] = useState<GalerieImage[]>([]);
+  const [bucket, setBucket] = useState("photos-controles");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/images", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => {
+        const result = (await response.json()) as { bucket?: string; images?: GalerieImage[]; error?: string };
+        if (!response.ok) throw new Error(result.error ?? "Les images ne sont pas disponibles.");
+        if (active) {
+          setBucket(result.bucket ?? "photos-controles");
+          setImages(result.images ?? []);
+        }
+      })
+      .catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Les images ne sont pas disponibles.");
+      })
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <section className="card-paper mt-6 overflow-hidden">
+      <div className="flex items-start justify-between gap-3 border-b border-sand/80 px-5 py-4">
+        <div>
+          <p className="font-mono-label text-[8px] text-steel/80">Supabase Storage · {bucket}</p>
+          <h2 className="mt-1 text-[13px] font-semibold text-pine">Photos de contrôle</h2>
+        </div>
+        <span className="font-mono-label text-[8px] text-steel/70">
+          {loading ? "Chargement…" : `${images.length} image${images.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      {error ? (
+        <p role="alert" className="px-5 py-8 text-[11px] text-clay">{error}</p>
+      ) : loading ? (
+        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="loading-sheen aspect-[4/3] bg-sand/30" />
+          ))}
+        </div>
+      ) : images.length === 0 ? (
+        <p className="px-5 py-8 text-[11px] text-steel">Aucune image trouvée dans ce bucket.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
+          {images.map((image) => (
+            <a
+              key={image.path}
+              href={image.url}
+              target="_blank"
+              rel="noreferrer"
+              className="group overflow-hidden border border-sand bg-white/60 transition hover:border-pine/30"
+            >
+              <img
+                src={image.url}
+                alt={image.name}
+                loading="lazy"
+                className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]"
+              />
+              <span className="block truncate px-2.5 py-2 text-[10px] text-steel">{image.name}</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function LigneMobile({
   ligne,
   ouvert,
@@ -571,6 +776,7 @@ function LigneMobile({
 }) {
   const recu = ligne.statut === "Reçu";
   const detail = ligne.rapport ? anomaliesDe(ligne.rapport, manqueAnomalie) : null;
+  const rapporteur = ligne.rapport ? reporterName(ligne.rapport) : "";
   return (
     <div className={ouvert ? "bg-lime/[0.06]" : ""}>
       <button
@@ -633,6 +839,12 @@ function LigneMobile({
               })}
             </div>
             <div className="mt-3 border-t border-sand/70 pt-2.5">
+              {rapporteur && (
+                <p className="mb-1 text-[10px] leading-5 text-ink">
+                  <span className="font-mono-label text-[8px] text-steel">Rapporteur</span>
+                  <span className="ml-2">{rapporteur}</span>
+                </p>
+              )}
               <p className="font-mono-label text-[8px] text-steel">Remarques terrain</p>
               <p className="mt-1 text-[10px] leading-5 text-ink">
                 {ligne.rapport.remarques?.trim() || "Aucune remarque transmise."}
@@ -657,6 +869,7 @@ function FragmentRow({
   onToggle: () => void;
 }) {
   const recu = ligne.statut === "Reçu";
+  const rapporteur = ligne.rapport ? reporterName(ligne.rapport) : "";
   return (
     <>
       <tr
@@ -748,6 +961,12 @@ function FragmentRow({
               </div>
               <div className="mt-4 flex flex-wrap items-start justify-between gap-4 border-t border-sand/70 pt-3">
                 <div>
+                  {rapporteur && (
+                    <p className="mb-2 text-[11px] text-ink">
+                      <span className="font-mono-label text-[8px] text-steel">Rapporteur</span>
+                      <span className="ml-2">{rapporteur}</span>
+                    </p>
+                  )}
                   <p className="font-mono-label text-[8px] text-steel">Remarques terrain</p>
                   <p className="mt-1 max-w-xl text-[11px] leading-5 text-ink">
                     {ligne.rapport.remarques?.trim() || "Aucune remarque transmise."}

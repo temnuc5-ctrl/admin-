@@ -280,6 +280,7 @@ interface RapportBrut {
   unite: string;
   emplacement: string;
   created_at: string;
+  operationnelle?: boolean | null;
   remarques?: string | null;
   rapporteurs?: { nom?: string; prenom?: string } | { nom?: string; prenom?: string }[] | null;
   [cle: string]: unknown;
@@ -338,10 +339,17 @@ async function lireEmplacementsAttendus(config: SupabaseConfig) {
       body: "{}",
     });
     if (Array.isArray(données) && données.length) {
-      return données
+      const emplacements = données
         .map((ligne) => ligne as { secteur?: string; unite?: string; emplacement?: string })
         .filter((l) => l.secteur && l.unite && l.emplacement)
         .map((l) => ({ secteur: l.secteur!, unite: l.unite!, emplacement: l.emplacement! }));
+      const cle = (lieu: { secteur: string; unite: string; emplacement: string }) =>
+        `${lieu.secteur}|${lieu.unite}|${lieu.emplacement}`.toLocaleLowerCase("fr");
+      const présents = new Set(emplacements.map(cle));
+      const emplacementsLigneA = LIEUX_REFERENTIEL.filter(
+        (lieu) => lieu.secteur === "NISSAN" && lieu.unite === "LA" && !présents.has(cle(lieu)),
+      );
+      return [...emplacements, ...emplacementsLigneA];
     }
   } catch {
     /* RPC absente : on retombe sur le référentiel embarqué. */
@@ -472,11 +480,16 @@ async function televerserBucket(
   return `${config.url}/storage/v1/object/public/${config.bucket}/${cheminEncode}`;
 }
 
-async function urlSignee(config: SupabaseConfig, chemin: string) {
+async function urlSignee(
+  config: SupabaseConfig,
+  chemin: string,
+  expiresIn = 60 * 60 * 24 * 7,
+  bucket = config.bucket,
+) {
   if (!config.serviceKey) return null;
   const cheminEncode = chemin.split("/").map(encodeURIComponent).join("/");
   const response = await fetch(
-    `${config.url}/storage/v1/object/sign/${config.bucket}/${cheminEncode}`,
+    `${config.url}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${cheminEncode}`,
     {
       method: "POST",
       headers: {
@@ -484,7 +497,7 @@ async function urlSignee(config: SupabaseConfig, chemin: string) {
         Authorization: `Bearer ${config.serviceKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ expiresIn: 60 * 60 * 24 * 7 }),
+      body: JSON.stringify({ expiresIn }),
       signal: AbortSignal.timeout(15000),
     },
   );
@@ -492,6 +505,75 @@ async function urlSignee(config: SupabaseConfig, chemin: string) {
   const payload = (await response.json()) as { signedURL?: string };
   return payload.signedURL ? `${config.url}/storage/v1${payload.signedURL.replace(/^\/storage\/v1/, "")}` : null;
 }
+
+interface ImageStorageObject {
+  id?: string | null;
+  name: string;
+  created_at?: string;
+  metadata?: { mimetype?: string } | null;
+}
+
+async function listerImages(config: SupabaseConfig, bucket: string) {
+  const images: { name: string; path: string; createdAt: string | null }[] = [];
+  const foldersVisites = new Set<string>();
+
+  async function parcourir(prefix: string, depth: number): Promise<void> {
+    if (depth > 5 || foldersVisites.size >= 500 || images.length >= 120 || foldersVisites.has(prefix)) return;
+    foldersVisites.add(prefix);
+
+    const result = await fetch(`${config.url}/storage/v1/object/list/${encodeURIComponent(bucket)}`, {
+      method: "POST",
+      headers: { ...entetes(config), "Content-Type": "application/json" },
+      body: JSON.stringify({ prefix, limit: 1000, offset: 0, sortBy: { column: "created_at", order: "desc" } }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!result.ok) throw new SupabaseRequestError(result.status, (await result.text().catch(() => "")).slice(0, 300));
+
+    const objects = (await result.json()) as ImageStorageObject[];
+    for (const object of objects) {
+      if (!object.name || object.name === "." || object.name === ".." || object.name.includes("/")) continue;
+      const path = prefix ? `${prefix}/${object.name}` : object.name;
+      const mimeType = object.metadata?.mimetype?.toLowerCase();
+      const isImage = mimeType?.startsWith("image/") || /\.(jpe?g|png|webp|gif|avif|heic|heif|bmp)$/i.test(object.name);
+      if (isImage) {
+        images.push({ name: object.name, path, createdAt: object.created_at ?? null });
+        if (images.length >= 120) return;
+      } else if (!object.id && !mimeType) {
+        await parcourir(path, depth + 1);
+      }
+    }
+  }
+
+  await parcourir("", 0);
+  return images.sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? ""));
+}
+
+export const handleAdminImages: RequestHandler = async (_request, response) => {
+  const config = supabaseConfig();
+  if (!config?.serviceKey) {
+    response.status(503).json({ error: "La clé serveur Supabase n'est pas configurée." });
+    return;
+  }
+
+  const bucket = process.env.SUPABASE_IMAGES_BUCKET || "photos-controles";
+  try {
+    const objects = await listerImages(config, bucket);
+    const images = await Promise.all(
+      objects.map(async (object) => ({
+        ...object,
+        url: await urlSignee(config, object.path, 60 * 60, bucket),
+      })),
+    );
+    response.setHeader("Cache-Control", "private, no-store");
+    response.status(200).json({ bucket, images: images.filter((image) => image.url) });
+  } catch (error) {
+    if (error instanceof SupabaseRequestError && error.status === 404) {
+      response.status(502).json({ error: `Le bucket « ${bucket} » est introuvable.` });
+      return;
+    }
+    response.status(502).json({ error: "Les images Supabase n'ont pas pu être chargées." });
+  }
+};
 
 export const handleAdminExport: RequestHandler = async (request, response) => {
   const parsed = exportSchema.safeParse(request.body);
