@@ -469,8 +469,6 @@ export default function AdminReports() {
         </Carte>
       </div>
 
-      <GalerieImages />
-
       {/* Filtres + tableau */}
       <section className="animate-rise delay-3 mt-6">
         <div className="flex flex-col gap-3 border-b border-sand pb-4 lg:flex-row lg:items-end lg:justify-between">
@@ -556,7 +554,7 @@ export default function AdminReports() {
             </div>
           )}
 
-          <div className="flex flex-wrap border border-sand bg-white/50 p-0.5" role="group" aria-label="Filtrer par état d’évaluation">
+          <div className="flex flex-wrap border border-sand bg-white/50 p-0.5" role="group" aria-label="Filtrer par état d'évaluation">
             {STATUT_OPTIONS.map((statut) => (
               <button
                 key={statut}
@@ -681,85 +679,6 @@ export default function AdminReports() {
         </div>
       </section>
     </AdminLayout>
-  );
-}
-
-interface GalerieImage {
-  name: string;
-  path: string;
-  createdAt: string | null;
-  url: string;
-}
-
-function GalerieImages() {
-  const [images, setImages] = useState<GalerieImage[]>([]);
-  const [bucket, setBucket] = useState("photos-controles");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    fetch("/api/admin/images", { credentials: "same-origin", cache: "no-store" })
-      .then(async (response) => {
-        const result = (await response.json()) as { bucket?: string; images?: GalerieImage[]; error?: string };
-        if (!response.ok) throw new Error(result.error ?? "Les images ne sont pas disponibles.");
-        if (active) {
-          setBucket(result.bucket ?? "photos-controles");
-          setImages(result.images ?? []);
-        }
-      })
-      .catch((reason) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Les images ne sont pas disponibles.");
-      })
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  return (
-    <section className="card-paper mt-6 overflow-hidden">
-      <div className="flex items-start justify-between gap-3 border-b border-sand/80 px-5 py-4">
-        <div>
-          <p className="font-mono-label text-[8px] text-steel/80">Supabase Storage · {bucket}</p>
-          <h2 className="mt-1 text-[13px] font-semibold text-pine">Photos de contrôle</h2>
-        </div>
-        <span className="font-mono-label text-[8px] text-steel/70">
-          {loading ? "Chargement…" : `${images.length} image${images.length === 1 ? "" : "s"}`}
-        </span>
-      </div>
-      {error ? (
-        <p role="alert" className="px-5 py-8 text-[11px] text-clay">{error}</p>
-      ) : loading ? (
-        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="loading-sheen aspect-[4/3] bg-sand/30" />
-          ))}
-        </div>
-      ) : images.length === 0 ? (
-        <p className="px-5 py-8 text-[11px] text-steel">Aucune image trouvée dans ce bucket.</p>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
-          {images.map((image) => (
-            <a
-              key={image.path}
-              href={image.url}
-              target="_blank"
-              rel="noreferrer"
-              className="group overflow-hidden border border-sand bg-white/60 transition hover:border-pine/30"
-            >
-              <img
-                src={image.url}
-                alt={image.name}
-                loading="lazy"
-                className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]"
-              />
-              <span className="block truncate px-2.5 py-2 text-[10px] text-steel">{image.name}</span>
-            </a>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
 
